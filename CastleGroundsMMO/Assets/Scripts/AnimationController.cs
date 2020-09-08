@@ -6,6 +6,7 @@ public class AnimationController : MonoBehaviour
 {
     
     public Animator anim;
+    public enum JumpType {Default, Double, Triple};
 
     // Update is called once per frame
     void Update()
@@ -21,16 +22,51 @@ public class AnimationController : MonoBehaviour
         }
     }
 
-    public void Jump() 
+    public void Skid () 
     {
-        anim.SetTrigger("DefaultJump");
-        anim.ResetTrigger("DefaultLand");
+        anim.SetTrigger("Skid");
+    }
+
+    public void Jump(JumpType type) 
+    {
+        if(type == JumpType.Default)
+        {
+            anim.SetTrigger("DefaultJump");
+            anim.ResetTrigger("DefaultLand");
+        }
+        if(type == JumpType.Double)
+        {
+            anim.SetTrigger("DoubleJump");
+            anim.ResetTrigger("DoubleLand");
+        }
+        if(type == JumpType.Triple)
+        {
+            anim.SetTrigger("TripleJump");
+            anim.ResetTrigger("TripleLand");
+        }
     }
 
     public void Land()
     {
         anim.SetTrigger("DefaultLand");
         anim.ResetTrigger("DefaultJump");
+        anim.SetTrigger("DoubleLand");
+        anim.ResetTrigger("DoubleJump");
+        anim.SetTrigger("TripleLand");
+        anim.ResetTrigger("TripleJump");
+        grounded(true);
+    }
+
+    public void grounded (bool isGrounded) 
+    {
+        if(isGrounded)
+        {
+            anim.SetBool("Grounded", true);
+        }
+        else
+        {
+            anim.SetBool("Grounded", false);
+        }
     }
 
 }
