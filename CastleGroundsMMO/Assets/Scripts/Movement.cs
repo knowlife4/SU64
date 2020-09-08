@@ -8,6 +8,7 @@ public class Movement : MonoBehaviour
     //Public Variables
         //public transforms
         public Transform GameModel;
+        public AnimationController animControl;
 
         //public floats
         public float Speed;
@@ -16,6 +17,9 @@ public class Movement : MonoBehaviour
         public float MaxFloorSlope;
         public float JumpForce;
         public float smooth = 5f;
+
+        //public sounds
+        public AudioClip[] JumpSounds;
 
         //public bools
         public bool Grounded;
@@ -33,12 +37,14 @@ public class Movement : MonoBehaviour
     CapsuleCollider capsule;
     float LowestY;
     RaycastHit LowestHit;
+    AudioSource source;
     
     bool Jumping;
     public int JumpCount;
 
     void Start()
     {
+        source = GetComponent<AudioSource>();
         t_Reference = new GameObject().transform;
 		t_Reference.transform.parent = transform;
         body = GetComponent<Rigidbody>();
@@ -51,10 +57,12 @@ public class Movement : MonoBehaviour
     {
         t_Reference.eulerAngles = new Vector3(0, Camera.main.transform.eulerAngles.y, 0);
         body.velocity = new Vector3(0,body.velocity.y,0);
-        if (Input.GetButtonDown("Jump") && CanJump && JumpCount < 2) {
+        if (Input.GetButtonDown("Jump") && CanJump && JumpCount < 1) {
 			Jumping = true;
 			body.velocity = new Vector3(body.velocity.x, JumpForce, body.velocity.z);
 			JumpCount++;
+            animControl.Jump();
+            source.PlayOneShot(JumpSounds[Random.Range(0, JumpSounds.Length)], .5f);
 		}
     }
 
@@ -74,13 +82,14 @@ public class Movement : MonoBehaviour
     void FixedMovement ()
     {
         if ((Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0) && CanWalk){
+
             transform.Translate(new Vector3(relativeMovement.x, 0, relativeMovement.z) * (Speed));
-			body.constraints = previousConstraints;
+			//body.constraints = previousConstraints;
             GameModel.forward = Vector3.Lerp(GameModel.forward, new Vector3(relativeMovement.x, 0, relativeMovement.z),
 			LerpTime);
         }
         else {
-            body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ;
+            //body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ;
             }
 
         InputRaw = Vector3.ClampMagnitude(new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")), 1f);
@@ -123,6 +132,7 @@ public class Movement : MonoBehaviour
     void OnLand () {
         Grounded = true;
         JumpCount = 0;
+        animControl.Land();
     }
 
     public void ReceiveKnockback(Vector3 knockVector) {

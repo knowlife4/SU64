@@ -9,7 +9,7 @@ Category {
     Tags {"Queue"="AlphaTest" "IgnoreProjector"="True" "RenderType"="Transparent"}
     LOD 100
 
-    Cull Off Lighting Off ZWrite Off
+    Cull Off Lighting Off ZWrite On
     Blend SrcAlpha OneMinusSrcAlpha
 
     SubShader {
