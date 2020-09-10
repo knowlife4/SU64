@@ -1,77 +1,139 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
 
 public class Movement : MonoBehaviour
 {
-    //Public Variables
-        //public transforms
-        public Transform GameModel;
-        public AnimationController animControl;
 
-        //public floats
-        public float Speed;
-        public float LerpTime;
-        public float GroundedRay;
-        public float MaxFloorSlope;
-        public float JumpForce;
-        public float smooth = 5f;
+    public AnimationController animControl;
 
-        //public sounds
-        public AudioClip[] JumpSounds;
-        public AudioClip[] DoubleJumpSounds;
-        public AudioClip[] TripleJumpSounds;
+    public float speed = 5; // units per second
+    public float turnSpeed = 90f; // degrees per second
+    public float jumpSpeed = 8f;
+    public float gravity = 9.8f;
+    public float LerpTime;
+    public float MaxFloorSlope;
+    public float GroundedRay;
 
-        //public bools
-        public bool Grounded;
-        public bool CanJump = true;
-        public bool CanWalk = true;
+    public Transform GameModel;
+
+    public bool Grounded;
+    public bool ccGrounded;
+    public bool CanJump = true;
+    public bool CanWalk = true;
 
 
-    //Private Variables
+    public AudioClip[] JumpSounds;
+    public AudioClip[] DoubleJumpSounds;
+    public AudioClip[] TripleJumpSounds;
+    
+
+    float vSpeed = 0f;
+    CharacterController controller;
     Vector3 InputRaw;
+    Vector3 movingDirection = Vector3.zero;
     Vector3 relativeMovement;
     Transform t_Reference;
-    Rigidbody body;
-    RigidbodyConstraints previousConstraints;
     RaycastHit hit;
     CapsuleCollider capsule;
     float LowestY;
     RaycastHit LowestHit;
     AudioSource source;
-    
-    bool Jumping;
+
+    public bool Jumping;
     public int JumpCount;
     public bool moving = false;
 
-    void Start()
+    void Awake () 
     {
         source = GetComponent<AudioSource>();
+        capsule = GetComponent<CapsuleCollider>();
+        controller = GetComponent<CharacterController>();
         t_Reference = new GameObject().transform;
 		t_Reference.transform.parent = transform;
-        body = GetComponent<Rigidbody>();
-        previousConstraints = body.constraints;
-        capsule = GetComponent<CapsuleCollider>();
-        LowestHit = new RaycastHit();
+        OnLand();
     }
 
-    void LateUpdate()
+    void LateUpdate () 
+    {
+        JumpUpdate();
+    }
+
+
+    void Update () 
     {
         t_Reference.eulerAngles = new Vector3(0, Camera.main.transform.eulerAngles.y, 0);
-        body.velocity = new Vector3(0,body.velocity.y,0);
-        if (Input.GetButtonDown("Jump") && CanJump && Grounded) {
+        MoveUpdate();
+
+        if(controller.isGrounded && Jumping)
+        {
+            OnLand();
+        }
+    }
+
+    public void JumpCountReset () 
+    {
+        JumpCount = 0;
+    }
+
+    void MoveUpdate () 
+    {
+        Vector3 vel = new Vector3(GameModel.forward.x, vSpeed, GameModel.forward.z) * relativeMovement.magnitude * (speed);
+        InputRaw = Vector3.ClampMagnitude(new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")), 1f);
+        relativeMovement = t_Reference.TransformVector(InputRaw);
+
+        if ((Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0))
+        {
+            moving = true;
+            GameModel.forward = Vector3.Lerp(GameModel.forward, new Vector3(relativeMovement.x, 0, relativeMovement.z), LerpTime);
+            if(animControl.anim.GetCurrentAnimatorStateInfo(0).IsName("WalkBlend"))
+            {
+                JumpCount = 0;
+            }
+        }
+        else
+        {
+            if(moving)
+            {
+                moving = false;
+            }
+            if(JumpCount >= 2)
+            {
+                JumpCount = 0;
+            }
+        }
+        if(!controller.isGrounded)
+        {
+            vSpeed -= gravity * Time.deltaTime;
+        }
+        else
+        {
+            if(!Jumping)
+            {
+                vSpeed = transform.position.y-10;
+            }
+        }
+        vel.y = vSpeed;
+        controller.Move(vel * Time.deltaTime);
+    }
+
+    void Jump(float force, AudioClip sound, AnimationController.JumpType type)
+    {
+        animControl.Jump(type);
+        vSpeed = force;
+        Jumping = true;
+        source.PlayOneShot(sound, .5f);
+    }
+
+    void JumpUpdate () 
+    {
+        if (Input.GetButtonDown("Jump") && CanJump && controller.isGrounded) {
             if(JumpCount == 2)
             {
                 if(animControl.anim.GetCurrentAnimatorStateInfo(0).IsName("DoubleJumpLand"))
                 {
-                    animControl.Jump(AnimationController.JumpType.Triple);
-                    Jumping = true;
-                    body.velocity = new Vector3(body.velocity.x, JumpForce*2f, body.velocity.z);
-                    JumpCount++;
-                    
-                    source.PlayOneShot(TripleJumpSounds[Random.Range(0, TripleJumpSounds.Length)], .5f);
-                    
+                    Jump(35f, TripleJumpSounds[Random.Range(0, TripleJumpSounds.Length)], AnimationController.JumpType.Triple);
+                    JumpCount++;  
                 }
                 
             }
@@ -79,11 +141,8 @@ public class Movement : MonoBehaviour
             {
                 if(animControl.anim.GetCurrentAnimatorStateInfo(0).IsName("DefaultJumpLand"))
                 {
-                    Jumping = true;
-                    body.velocity = new Vector3(body.velocity.x, JumpForce+1, body.velocity.z);
+                    Jump(26f, DoubleJumpSounds[Random.Range(0, DoubleJumpSounds.Length)], AnimationController.JumpType.Double);
                     JumpCount++;
-                    animControl.Jump(AnimationController.JumpType.Double);
-                    source.PlayOneShot(DoubleJumpSounds[Random.Range(0, DoubleJumpSounds.Length)], .5f);
                 }
                 else
                 {
@@ -92,111 +151,18 @@ public class Movement : MonoBehaviour
             }
             if(JumpCount == 0)
             {
-                Jumping = true;
-                body.velocity = new Vector3(body.velocity.x, JumpForce, body.velocity.z);
+                Jump(21f, JumpSounds[Random.Range(0, JumpSounds.Length)], AnimationController.JumpType.Default);
                 JumpCount++;
-                animControl.Jump(AnimationController.JumpType.Default);
-                source.PlayOneShot(JumpSounds[Random.Range(0, JumpSounds.Length)], .5f);
             }
 		}
-    }
-
-    public void JumpCountReset () 
-    {
-        JumpCount = 0;
-    }
-
-    void FixedUpdate()
-    {
-        RaycastHit hit1;
-        if (Physics.Raycast(transform.position, transform.TransformDirection(-Vector3.up), out hit1, 2f))
-        {
-            Quaternion targetRotation = Quaternion.FromToRotation(GameModel.up, hit1.normal) * GameModel.rotation;
-            GameModel.rotation = Quaternion.RotateTowards(GameModel.rotation, targetRotation , smooth * Time.deltaTime);
-        }
-        FixedMovement();
-        Ground();
-    }
-
-    //Movement Processing
-    void FixedMovement ()
-    {
-        if ((Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0)){
-            moving = true;
-            //transform.Translate(new Vector3(relativeMovement.x, 0, relativeMovement.z) * (Speed));
-            transform.Translate((new Vector3(GameModel.forward.x, 0, GameModel.forward.z)* relativeMovement.magnitude) * (Speed));
-			//body.constraints = previousConstraints;
-            GameModel.forward = Vector3.Lerp(GameModel.forward, new Vector3(relativeMovement.x, 0, relativeMovement.z),
-			LerpTime);
-            if(animControl.anim.GetCurrentAnimatorStateInfo(0).IsName("WalkBlend"))
-            {
-                JumpCount = 0;
-            }
-        }
-        else {
-            if(moving)
-            {
-                Debug.Log("Stopped");
-                animControl.Skid();
-                moving = false;
-            }
-            JumpCount = 0;
-            //body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ;
-            }
-
-        InputRaw = Vector3.ClampMagnitude(new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")), 1f);
-
-        float TurnAngle = Mathf.Abs(Vector3.Angle(new Vector3(GameModel.forward.x, 0, GameModel.forward.z),
-			new Vector3(relativeMovement.x, 0, relativeMovement.z)));
-
-        relativeMovement = t_Reference.TransformVector(InputRaw);
-    }
-
-    void Ground () {
-        LowestY = float.MaxValue;
-        GroundRaycast(capsule.transform.position);
-		GroundRaycast(new Vector3(capsule.transform.position.x, capsule.transform.position.y,
-			capsule.transform.position.z + capsule.radius));
-		GroundRaycast(new Vector3(capsule.transform.position.x + capsule.radius, capsule.transform.position.y,
-			capsule.transform.position.z));
-		GroundRaycast(new Vector3(capsule.transform.position.x - capsule.radius, capsule.transform.position.y,
-			capsule.transform.position.z));
-		GroundRaycast(new Vector3(capsule.transform.position.x, capsule.transform.position.y,
-			capsule.transform.position.z - capsule.radius));
-       if ((LowestY == float.MaxValue || (Jumping && body.velocity.y <= 0))) {
-			if (Jumping) Jumping = false;
-			if (Grounded) Grounded = false; animControl.grounded(false);
-		}
-		else {
-			float SlopeAngle = Mathf.Abs(Vector3.Angle(Vector3.up, LowestHit.normal));
-			if ((MaxFloorSlope == 0 || SlopeAngle < -MaxFloorSlope || SlopeAngle > MaxFloorSlope)) {
-				if (Grounded) {
-					Grounded = false;
-                    animControl.grounded(false);
-				}
-			}
-			else if (!Grounded && !Jumping) {
-				OnLand();
-			}
-        
-        }
     }
 
     void OnLand () {
         Grounded = true;
         animControl.Land();
+        if(Jumping)
+        {
+            Jumping = false;
+        }
     }
-
-    public void ReceiveKnockback(Vector3 knockVector) {
-		body.velocity = knockVector;
-	}
-    
-    private void GroundRaycast(Vector3 origin) {
-		if (Physics.Raycast(origin, -Vector3.up, out hit, capsule.height / 2f * 1.2f,
-			~LayerMask.GetMask("Player")))
-			if (hit.point.y < LowestY) {
-				LowestY = hit.point.y;
-				LowestHit = hit;
-			}
-	}
 }
